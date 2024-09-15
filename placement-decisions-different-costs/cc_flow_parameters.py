@@ -4,7 +4,7 @@ Community Corrections Project - Flow Parameters
 - All the parameterize is on the fast-timescale model, i.e., arrival and departure counted per day
 
 Author: Xiaoquan Gao
-Last Updated: 9/30/2022
+Last Updated: 9/14/2024
 """
 
 import math
@@ -16,7 +16,7 @@ import math
 '''Modeling Settings'''
 N_Programs = 3  # Number of programs
 N_RiskTypes = 2  # Number of risk types
-N_NeedTypes = 2  # Number of need types
+N_NeedTypes = 1  # Number of need types
 # N_Types = N_RiskTypes * N_NeedTypes  # Total number of customer types
 Total_Horizon = 1080    # Length of simulation horizon
 # Total_Horizon = 90     # Length of simulation horizon
@@ -28,7 +28,15 @@ ArrivalRate = [[0 for _ in range(N_NeedTypes)] for _ in range(N_RiskTypes)]
 # Parameterize the arrival rate based on IDOC and TCCC data
 # A_base = (20.09 + 26.2 + 0.8 + 37.2) / 7
 
-if N_RiskTypes == 2 and N_NeedTypes == 2:
+if N_RiskTypes == 2 and N_NeedTypes == 1:
+    A_base = 12.04 * 0.8 * 1.0
+    for m_risk in range(N_RiskTypes):
+        for m_need in range(N_NeedTypes):
+            # Adjust the arrival according to the risk and need type
+            ArrivalRate[m_risk][m_need] = A_base * (0.3 + 0.4 * m_risk)
+    ClassNames = [['severe-'], ['mild']]
+    # print(ArrivalRate)
+elif N_RiskTypes == 2 and N_NeedTypes == 2:
     A_base = 12.04 * 0.8 * 1.0
     for m_risk in range(N_RiskTypes):
         for m_need in range(N_NeedTypes):

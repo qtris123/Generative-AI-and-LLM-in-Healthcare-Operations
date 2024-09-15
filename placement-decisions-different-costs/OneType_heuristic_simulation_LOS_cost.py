@@ -2,7 +2,7 @@
 Community Corrections Project - CC Simulation Functions
 
 Author: Xiaoquan Gao
-Last Updated: 8/29/2024
+Last Updated: 9/14/2024
 """
 
 """
@@ -28,7 +28,7 @@ from cc_cost_parameters import *
 import warnings
 warnings.filterwarnings("ignore")
 
-N_LosTypes=2
+N_LosTypes = 2
 
 # Generate number of new arrivals following the Poisson process and flow parameters
 def get_number_arrivals():
@@ -102,7 +102,8 @@ def placement_onetype_based(m_risk, m_need, occupancy, conj_rcdvm, conj_vio):
         Cost_rcd = conj_rcdvm[j_prog] * P_rcdvm[j_prog][m_risk][m_need]
         # Violation Cost
         Cost_vol = conj_vio[j_prog] * P_vio[j_prog][m_risk]
-        C = Cost_ocp + Cost_rcd + Cost_vol + 0.2 * random.random()
+        # C = Cost_ocp + Cost_rcd + Cost_vol + 0.2 * random.random()
+        C = Cost_ocp + Cost_rcd + Cost_vol
 
         '''Cost-to-go'''
         # Approximated the value function from lasso
@@ -127,12 +128,12 @@ def sum_over_risk_need(current_ocp, prog, los):
   sum_ocp = 0
   # Iterate through all possible values of risk and need
   for risk in range(len(current_ocp[prog])):
-    for need in range(len(current_ocp[risk])):
+    for need in range(N_NeedTypes):
       sum_ocp += current_ocp[prog][risk][need][los]
   return max(0, sum_ocp)
 
 
-def run_rl_based_heuristic_simulation(end_time, setting_index, c_unit_occu, c_unit_vio):
+def run_rl_based_heuristic_simulation(end_time, placement_df, c_unit_occu, c_unit_vio):
     random.seed(2024)
     np.random.seed(2024)
     placement_df = pd.DataFrame()
@@ -181,7 +182,7 @@ def run_rl_based_heuristic_simulation(end_time, setting_index, c_unit_occu, c_un
 
         # Get number of new arrivals based on the input routing policy
         occupancy_los = [[sum_over_risk_need(occup_dict[t-1], j_prog, los) for los in range(N_LosTypes)]
-                     for j_prog in range(N_Programs)]
+                         for j_prog in range(N_Programs)]
         # print(occupancy_los)
         occupancy = [occupancy_los[j][N_LosTypes-1] for j in range(N_Programs)]
         cost += ocp_cost_lin(occupancy)
@@ -309,8 +310,8 @@ def run_rl_based_heuristic_simulation(end_time, setting_index, c_unit_occu, c_un
         # Update time
         t += 1
 
-    csv_filename = f'placementDecisions_rl_los_cost_{str(setting_index)}.csv'
-    placement_df.to_csv(csv_filename, index=False)
+    # csv_filename = f'placementDecisions_rl_los_cost_{str(setting_index)}.csv'
+    # placement_df.to_csv(csv_filename, index=False)
 
     Avg_ocp = average_over_key(occup_dict)
     cost_sum = 0
@@ -323,21 +324,21 @@ def run_rl_based_heuristic_simulation(end_time, setting_index, c_unit_occu, c_un
     Sum_vio = sum_over_key(vio_dict)
     cost_sum += c_unit_vio * nested_sum(Sum_vio)
 
-    return Avg_ocp, Sum_rcd, Sum_vio, cost_sum
+    return Avg_ocp, Sum_rcd, Sum_vio, cost_sum, placement_df
 
 
 if __name__ == '__main__':
 
     # Define ranges for each parameter
-    temp_occu_coef_range = [0.00018, 0.00036, 0.00072]  # Range for temp_occu_coef (baseline cost of occupancy)
-    c_unit_vio_factor_range = [0.2, 0.3, 0.4]  # Range for c_unit_vio factor (unit cost of violation)
+    temp_occu_coef_range = [0.00009, 0.00036, 0.00144]  # Range for temp_occu_coef (baseline cost of occupancy)
+    c_unit_vio_factor_range = [0.1, 0.3, 0.5]  # Range for c_unit_vio factor (unit cost of violation)
 
     # Define variations for temp_occu_ratio
     # Order of stations: [jail, wr, hd]
     temp_occu_ratio_variations = [
         [1.0, 0.8, 0.3],  # Original ratio
-        [1.0, 0.6, 0.1],  # Alternative ratio -- cheap HD
-        [1.0, 0.6, 0.5],  # Alternative ratio -- expensive HD
+        [1.0, 0.8, 0.1],  # Alternative ratio -- cheap HD
+        [1.0, 0.3, 0.3],  # Alternative ratio -- expensive HD
     ]
 
     # Create all combinations of parameters
@@ -348,7 +349,13 @@ if __name__ == '__main__':
     ))
 
     # Open a file to write all cost parameters and results
-    with open('simulation_results.txt', 'w') as f:
+    placement_df = pd.DataFrame(columns=['c_occu_jail', 'c_occu_wr', 'c_occu_hd', 'c_vio',
+                                         'ocp_jl_low_los', 'ocp_jl_total',
+                                         'ocp_wr_low_los', 'ocp_wr_total',
+                                         'ocp_hd_low_los', 'ocp_hd_total',
+                                         'class_mild', 'need', 'placement'])
+    with open('simulation_results_2.txt', 'w') as f:
+        client_df = pd.DataFrame(columns=['ID', 'RiskType', 'NeedType', 'Program', 'ArrivalTime'])
         for index, (temp_occu_coef, c_unit_vio_factor, temp_occu_ratio) in enumerate(parameter_combinations):
             print('Simulation for Setting', index)
             # Calculate c_unit_occu and c_unit_vio based on the current combination
@@ -363,8 +370,7 @@ if __name__ == '__main__':
 
             # Run simulation
             print('index:', index)
-            Avg_ocp, Sum_rcd, Sum_vio, total_cost = run_rl_based_heuristic_simulation(Total_Horizon, index,
-                                                                                      c_unit_occu, c_unit_vio)
+            Avg_ocp, Sum_rcd, Sum_vio, total_cost, placement_df = run_rl_based_heuristic_simulation(Total_Horizon, placement_df, c_unit_occu, c_unit_vio)
 
             # Write results to file
             f.write("Results:\n")
@@ -374,23 +380,22 @@ if __name__ == '__main__':
             f.write(f"Total cost: {total_cost}\n")
             f.write("\n" + "=" * 50 + "\n\n")
 
+            placement_df.to_csv('combined_placementDecisions_rl_los_cost_2.csv', index=False)
+
         print("Simulation completed. Results written to simulation_results.txt")
 
-    # Assuming all CSVs are in the current directory and follow the same naming pattern
-    csv_files = glob.glob('placementDecisions_rl_los_cost_*.csv')
-
-    # Initialize an empty list to hold the DataFrames
-    dfs = []
-
-    # Loop through the list of CSV files and read each one into a DataFrame
-    for csv_file in csv_files:
-        df = pd.read_csv(csv_file)
-        dfs.append(df)
-
-    # Concatenate all the DataFrames into a single DataFrame
-    combined_df = pd.concat(dfs, ignore_index=True)
-
-    # Save the combined DataFrame to a new CSV file
-    combined_df.to_csv('combined_placementDecisions_rl_los_cost.csv', index=False)
-
-    print("All CSV files have been integrated into 'combined_placementDecisions_rl_los_cost.csv'")
+    # # Assuming all CSVs are in the current directory and follow the same naming pattern
+    # csv_files = glob.glob('placementDecisions_rl_los_cost_*.csv')
+    #
+    # # Initialize an empty list to hold the DataFrames
+    # dfs = []
+    #
+    # # Loop through the list of CSV files and read each one into a DataFrame
+    # for csv_file in csv_files:
+    #     df = pd.read_csv(csv_file)
+    #     dfs.append(df)
+    #
+    # # Concatenate all the DataFrames into a single DataFrame
+    # combined_df = pd.concat(dfs, ignore_index=True)
+    # combined_df.to_csv('combined_placementDecisions_rl_los_cost.csv', index=False)
+    # print("All CSV files have been integrated into 'combined_placementDecisions_rl_los_cost.csv'")

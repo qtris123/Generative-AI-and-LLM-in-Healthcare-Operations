@@ -3,7 +3,7 @@ Community Corrections Project - Cost Functions
  - Parameterized based on TCCC data for the model with 4 programs and 2 risk types
 
 Author: Xiaoquan Gao
-Last Updated: 12/18/2022
+Last Updated: 9/14/2024
 """
 
 import math
@@ -26,10 +26,8 @@ def cost_wr(ocp_wr):
 
 def ocp_cost(occupancy):
     cost = sum([c_unit_occu[j] * occupancy[j]**2 for j in range(N_Programs)])
-    if 0 <= occupancy[1] <= 100:
-        cost += 3 * occupancy[1] ** 2
-    elif occupancy[1] > 100:
-        cost += float('inf')
+    if occupancy[1] > 150:
+        cost += 10 * occupancy[1] ** 2
     return cost
 
 
@@ -49,10 +47,8 @@ def congestion_based_risks(occupancy):
     conj_th = [320, 130, 300]
 
     # Compute the congestion-adjusted risks
-    p_rcdvm_adj = [1, 1, 1.5]
-    p_vio_adj = [1, 1, 1.5]
-    # p_rcdvm_adj = [0, 0, 0]
-    # p_vio_adj = [0, 0, 0]
+    p_rcdvm_adj = [1.3, 1.2, 1.5]
+    p_vio_adj = [1.3, 1.2, 1.5]
 
     p_rcdvm_conj = [1 + p_rcdvm_adj[j] * max(occupancy[j] - conj_th[j], 0) / conj_th[j] for j in range(N_Programs)]
     p_vio_conj = [1 + p_vio_adj[j] * max(occupancy[j] - conj_th[j], 0) / conj_th[j] for j in range(N_Programs)]
@@ -63,7 +59,7 @@ def congestion_based_risks(occupancy):
 
 
 # gamma = 0.98  # discounting factor
-gamma = 0.5
+gamma = 0.8
 
 warm_start = 60    # only count costs after ### days
 
@@ -93,13 +89,18 @@ for j in range(N_Programs):
 T = 1080  # Recidivism Window
 # Recidivism -- depend both on risk class and need class
 p_base = [[[] for _ in range(N_NeedTypes)] for _ in range(N_RiskTypes)]
-# recidivism risk for high-risk classes (high-need, low-need) in different stations
-p_base[0][0].extend([0.0014, 0.0006, 0.0008])
-p_base[0][1].extend([0.0014, 0.0010, 0.0012])
-# recidivism risk for low-risk classes (high-need, low-need) in different stations
-p_base[1][0].extend([0.0010, 0.0002, 0.0006])
-p_base[1][1].extend([0.0010, 0.0006, 0.0008])
-# print(p_base)
+if N_RiskTypes == 2 and N_NeedTypes == 1:
+    # recidivism risk for high-risk classes in different stations
+    p_base[0][0].extend([0.0014, 0.0008, 0.001])
+    # recidivism risk for low-risk classes in different stations
+    p_base[1][0].extend([0.0010, 0.0004, 0.0007])
+elif N_RiskTypes == 2 and N_NeedTypes == 2:
+    # recidivism risk for high-risk classes (high-need, low-need) in different stations
+    p_base[0][0].extend([0.0014, 0.0006, 0.0008])
+    p_base[0][1].extend([0.0014, 0.0010, 0.0012])
+    # recidivism risk for low-risk classes (high-need, low-need) in different stations
+    p_base[1][0].extend([0.0010, 0.0002, 0.0006])
+    p_base[1][1].extend([0.0010, 0.0006, 0.0008])
 
 p_rate = 0.997
 def p_rcdvm_time(p_base, p_rate):
