@@ -193,6 +193,8 @@ def run_rl_based_heuristic_simulation(end_time, placement_df, c_unit_occu, c_uni
         # print('Time:', t, 'Arrivals:', num_arrivals[t], 'Placement:', route[0], route[1], 'Occupancy:', occupancy)
 
         # Add new arrivals into the client list
+        # create a temporary occupancy variable to document the placement decisions
+        occupancy_los_temp = deepcopy(occupancy_los)
         for m_risk in range(N_RiskTypes):
             for m_need in range(N_NeedTypes):
                 for j_prog in range(N_Programs):
@@ -206,15 +208,17 @@ def run_rl_based_heuristic_simulation(end_time, placement_df, c_unit_occu, c_uni
                                                           'c_occu_wr': c_unit_occu[1],
                                                           'c_occu_hd': c_unit_occu[2],
                                                           'c_vio': c_unit_vio,
-                                                          'ocp_jl_low_los': occupancy_los[0][0],
-                                                          'ocp_jl_total': occupancy_los[0][1],
-                                                          'ocp_wr_low_los': occupancy_los[1][0],
-                                                          'ocp_wr_total': occupancy_los[1][1],
-                                                          'ocp_hd_low_los': occupancy_los[2][0],
-                                                          'ocp_hd_total': occupancy_los[2][1],
+                                                          'ocp_jl_low_los': occupancy_los_temp[0][0],
+                                                          'ocp_jl_total': occupancy_los_temp[0][1],
+                                                          'ocp_wr_low_los': occupancy_los_temp[1][0],
+                                                          'ocp_wr_total': occupancy_los_temp[1][1],
+                                                          'ocp_hd_low_los': occupancy_los_temp[2][0],
+                                                          'ocp_hd_total': occupancy_los_temp[2][1],
                                                           'class_mild': m_risk,
                                                           'need': 1-m_need,
                                                           'placement': ProgramNames[j_prog]}, index=[0])
+                        occupancy_los_temp[j_prog][0] += 1
+                        occupancy_los_temp[j_prog][1] += 1
                         if t > warm_start:
                             placement_df = pd.concat([placement_df, new_row_placement], axis=0, ignore_index=True)
 
@@ -330,13 +334,15 @@ def run_rl_based_heuristic_simulation(end_time, placement_df, c_unit_occu, c_uni
 if __name__ == '__main__':
 
     # Define ranges for each parameter
-    temp_occu_coef_range = [0.00009, 0.00036, 0.00144]  # Range for temp_occu_coef (baseline cost of occupancy)
-    c_unit_vio_factor_range = [0.1, 0.3, 0.5]  # Range for c_unit_vio factor (unit cost of violation)
+    # temp_occu_coef_range = [0.00009, 0.00036, 0.00144]  # Range for temp_occu_coef (baseline cost of occupancy)
+    # c_unit_vio_factor_range = [0.1, 0.3, 0.5]  # Range for c_unit_vio factor (unit cost of violation)
+    temp_occu_coef_range = [0.00009, 0.00144]  # Range for temp_occu_coef (baseline cost of occupancy)
+    c_unit_vio_factor_range = [0.1, 0.5]  # Range for c_unit_vio factor (unit cost of violation)
 
     # Define variations for temp_occu_ratio
     # Order of stations: [jail, wr, hd]
     temp_occu_ratio_variations = [
-        [1.0, 0.8, 0.3],  # Original ratio
+        # [1.0, 0.8, 0.3],  # Original ratio
         [1.0, 0.8, 0.1],  # Alternative ratio -- cheap HD
         [1.0, 0.3, 0.3],  # Alternative ratio -- expensive HD
     ]
@@ -380,7 +386,7 @@ if __name__ == '__main__':
             f.write(f"Total cost: {total_cost}\n")
             f.write("\n" + "=" * 50 + "\n\n")
 
-            placement_df.to_csv('combined_placementDecisions_rl_los_cost_2.csv', index=False)
+            placement_df.to_csv('combined_placementDecisions_rl_los_cost_3_WR_cap.csv', index=False)
 
         print("Simulation completed. Results written to simulation_results.txt")
 
