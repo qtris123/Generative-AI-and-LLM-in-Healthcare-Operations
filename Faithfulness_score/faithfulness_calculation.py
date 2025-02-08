@@ -2,11 +2,14 @@
 import numpy as np
 import torch
 import pandas as pd
+import pickle
 
-from lime_explainer import LIME
+from explainer import Explainer
 from perturbation_method import NormalPerturbation
 
 from sklearn.ensemble import RandomForestClassifier
+import warnings
+warnings.simplefilter("ignore", category=UserWarning)
 
 def conv_disc_inds_to_char_enc(discrete_feature_indices: list[int], n_features: int):
     """Converts an array of discrete feature indices to a char encoding.
@@ -39,13 +42,20 @@ def conv_disc_inds_to_char_enc(discrete_feature_indices: list[int], n_features: 
     return char_encoding
 
 class FaithfulnessScore:
-    def __init__(self):
-        lime_explainer = LIME()
-        self.lime_explainer = lime_explainer.explainer #LIME explainer
-        self.data = lime_explainer.cleaned_data #cleaned, full data, pd.Dataframe
-        self.model = lime_explainer.model #model
-        self.labels = lime_explainer.labels #labels
-        self.test_data = lime_explainer.test_data #test_data
+    def __init__(self, mode='SHAP'):
+        if mode == 'LIME':
+            explainer = Explainer(mode)
+            self.lime_explainer = explainer.explainer_model #LIME explainer
+        elif mode =='SHAP':
+            explainer = Explainer(mode)
+            self.not_trained = explainer.not_trained #during the first attempt (when not_trained == True), a RF model and its SHAP explanation for X_train data should alr be saved. Hence, no need to run the SHAP explainer again.
+            self.shap_explainer = explainer.explainer_model # SHAP explainer  
+
+        self.mode = mode
+        self.data = explainer.cleaned_data #cleaned, full data, pd.Dataframe
+        self.model = explainer.model #model
+        self.labels = explainer.labels #labels
+        self.test_data = explainer.test_data #test_data
 
         self.discrete_features = [2,3,4,5,6,7] # I extract these numbers manually from model.feature_names
 
@@ -81,20 +91,49 @@ class FaithfulnessScore:
         faithfulness = 0
         # iterate through the impact from top-1 to top-k feature
         for k_i in range(1,k+1):
-            # create an explanation for one instance/row; at the moment, take 9 as an example.
-            exp_instance = self.lime_explainer.explain_instance(np.array(self.test_data[self.test_data.index == 9])[0], self.model.predict_proba, num_features=14, top_labels=k_i)
-            c_label = list(exp_instance.predict_proba).index(max(exp_instance.predict_proba)) #the most likely class
-            feature_contribution_scores = exp_instance.as_map()[c_label]
+            if self.mode == "LIME":
+                # select explanation values for one instance/row; at the moment, take 9 as an example.
+                exp_instance = self.lime_explainer.explain_instance(np.array(self.test_data[self.test_data.index == 9])[0], self.model.predict_proba, num_features=14, top_labels=k_i)
+                c_label = list(exp_instance.predict_proba).index(max(exp_instance.predict_proba)) #the most likely class
+                feature_contribution_scores = exp_instance.as_map()[c_label]
 
-            # Construct original mask as all true (i.e., all indices are masked and non are perturbed)
-            top_k_map = torch.tensor([True] * len(feature_contribution_scores), dtype=torch.bool)
+                # Construct original mask as all true (i.e., all indices are masked and non are perturbed)
+                top_k_map = torch.tensor([True] * len(feature_contribution_scores), dtype=torch.bool)
 
-            # Unmask topk instances 
-            top_k_indices = [ x[0] for x in exp_instance.as_map()[c_label]][:k_i]
-            top_k_map[top_k_indices] = False
+                # Unmask topk instances 
+                top_k_indices = [ x[0] for x in exp_instance.as_map()[c_label]][:k_i]
+                top_k_map[top_k_indices] = False
+
+
+            elif self.mode == "SHAP":
+                if (self.not_trained):
+                    explanation = self.shap_explainer(self.test_data)
+                    with open('shap_explanation.pkl', 'wb') as file:
+                        pickle.dump(explanation, file)
+                else:
+                    with open('shap_explanation.pkl', 'rb') as file:
+                        explanation = pickle.load(file)
+                # select explanation values for one instance/row; at the moment, take 9 as an example
+                X_test_copy = self.test_data.copy()
+                X_test_copy['index'] = range(X_test_copy.shape[0])
+                ind = X_test_copy[X_test_copy.index == 9]['index'].values[0] #add a (sorted) index column to hep find the index of the row for the explaination values.
+                # the final shap value = base value + sum of the feature contributions (for each class)
+                sum_features = np.sum(explanation[ind,:,:].values, axis = 0) # dim(n_features x n_classes)
+                base_values = self.shap_explainer.expected_value # dim(1 x n_classes) #use shap_explainer not explanation
+                c_label = np.argmax(base_values + sum_features) # the most likely class for an instance
+                feature_contribution_scores = explanation[ind,:,c_label]
+
+                # Construct original mask as all true (i.e., all indices are masked and non are perturbed)
+                top_k_map = torch.tensor([True] * len(feature_contribution_scores), dtype=torch.bool)
+
+                # Unmask topk instances 
+                top_k_indices = list(np.argsort(abs(feature_contribution_scores.values))[-k_i:])
+                top_k_map[top_k_indices] = False
 
             # If top-k provide top-k instances 
             x = np.array(self.test_data[self.test_data.index == 9]) # x input for compute_faithfulness_topk is an np.array with reshape(1,-1) or without [0]
+
+                
             if metric == "topk":
                 faithfulness += self._compute_faithfulness_topk(x, c_label, top_k_map)
             else:
@@ -108,7 +147,7 @@ class FaithfulnessScore:
 
         Args:
             x: The original sample
-            label:
+            label: the most likely class
             top_k_mask:
             num_samples: number of perturbations used for Monte Carlo expectation estimate
         """
@@ -121,7 +160,6 @@ class FaithfulnessScore:
         }
         # Compute perturbed instance
         x_perturbed = self.perturbation_method.get_perturbed_inputs(**perturb_args)
-
         # TODO(satya): Could you make these lines more readable?
         y = self._arr([i[label] for i in self._arr(self.model.predict_proba(x.reshape(1, -1)))])
         y_perturbed = self._arr([i[label] for i in self._arr(self.model.predict_proba(x_perturbed.float()))])
@@ -190,4 +228,4 @@ class FaithfulnessScore:
     """""
 
 obj = FaithfulnessScore()
-print(obj._compute_faithfulness_auc())
+print(f'the faithful score is: {obj._compute_faithfulness_auc()}')
