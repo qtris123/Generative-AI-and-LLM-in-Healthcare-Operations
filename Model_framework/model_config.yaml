@@ -1,0 +1,76 @@
+RandomForest:
+  param_grid:
+    n_estimators: [50, 100, 150]
+    max_depth: [10, 13, 15]
+    min_samples_leaf: [1, 2, 4]
+    max_features: ["sqrt", "log2"]
+  best_params:
+    n_estimators: 150
+    max_depth: 13
+    min_samples_leaf: 4
+    min_samples_split: 2
+    max_features: "sqrt"
+    #random_state: 50
+
+LogisticRegression:
+  param_grid:
+    C: [0.001, 10, 100.0]
+    solver: ["sag", "saga", "liblinear"]
+    penalty: ["l1", "l2"]
+  best_params:
+    max_iter: 1000
+    C: 10
+    solver: "saga"
+    penalty: "l1"
+    random_state: 50
+
+MLPClassifier:
+  param_grid:
+    hidden_layer_sizes: [[50], [100], [100, 50]]
+    activation: ["relu", "tanh"]
+    alpha: [0.0001, 0.001]
+    max_iter: [500]
+  best_params:
+    hidden_layer_sizes: [50]
+    activation: "tanh"
+    alpha: 0.001
+    random_state: 50
+    max_iter: 500
+
+SVM:
+  param_grid:
+    C: [0.1, 1]
+    kernel: ["linear", "rbf"]
+    gamma: ["scale", "auto"]
+  best_params:
+    C: 1
+    kernel: "linear"
+    gamma: "auto"
+    probability: True
+    random_state: 50
+
+AdaBoost:
+  param_grid:
+    n_estimators: [50, 100, 200]
+    learning_rate: [0.01, 0.1, 1.0]
+    algorithm: ["SAMME", "SAMME.R"]
+  best_params:
+    n_estimators: 100
+    learning_rate: 1.0
+    algorithm: "SAMME"
+    random_state: 50
+
+GradientBoosting:
+  param_grid:
+    n_estimators: [50, 100, 200]
+    learning_rate: [0.01, 0.1, 1.0]
+    max_depth: [3, 5, 7]
+    min_samples_split: [2, 5]
+    min_samples_leaf: [1, 2]
+  best_params:
+    n_estimators: 100
+    learning_rate: 0.1
+    max_depth: 5
+    min_samples_split: 2
+    min_samples_leaf: 1
+    random_state: 50

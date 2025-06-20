@@ -1,0 +1,1 @@
+Scorings for rf with dataset placement:{roc_auc: 0.9207222653929454, f1: 0.793440093441444, precision: 0.7899285242405095, recall: 0.80569044747906, accuracy: 0.80569044747906}

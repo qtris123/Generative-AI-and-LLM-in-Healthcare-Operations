@@ -1,0 +1,2 @@
+{'activation': 'tanh', 'alpha': 0.001, 'hidden_layer_sizes': [50], 'max_iter': 500}
+0.806258808776976

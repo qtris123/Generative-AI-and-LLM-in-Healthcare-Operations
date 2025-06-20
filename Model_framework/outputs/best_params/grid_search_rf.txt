@@ -1,0 +1,2 @@
+{'max_depth': 13, 'max_features': 'sqrt', 'min_samples_leaf': 4, 'n_estimators': 150}
+0.7542784021629123
